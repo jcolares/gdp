@@ -1,0 +1,2 @@
+# gdp
+Gradiente Descendente Paralelo
