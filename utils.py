@@ -47,6 +47,7 @@ def split_data(X_train, y_train, n_jobs, split_per_job, overlap=False):
         # np.random.choice uses replace=False so that one worker gets unique samples
         splits = [np.random.choice(data_size, size=int(split_per_job*data_size), replace=False) for _ in range(n_jobs)]
         data = zip([X_train[split] for split in splits], [y_train[split] for split in splits])
+        data = list(data)
     else:
         if split_per_job != 1/n_jobs:  # Data must be split evenly if there is no overlap
             raise Exception("split_per_job must be equal to 1/n_jobs")
@@ -108,22 +109,17 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
 
         for n, sgd in enumerate(sgds):  # Fit model for each "worker" one-by-by
             if n < n_jobs:
-                print("dados para o fitting")
-                #print(data[n][0], data[n][1])
-                print(data[n][1], data[n][0])
                 sgd.partial_fit(data[n][0], data[n][1])  # partial_fit() allows iterative training
-                print("Fex fitting com os dados")
                 iter_scores += [sgd.score(X_test, y_test)]
                 iter_coefs += [sgd.coef_]
                 iter_intercepts += [sgd.intercept_]
             else:
-                # Calcuate aggregate score fo this iteration
+                # Calcuate aggregate score for this iteration
                 iter_coefs = np.mean(np.array(iter_coefs), axis=0)
                 iter_intercepts = np.mean(np.array(iter_intercepts), axis=0)
-
                 sgd.coef_ = iter_coefs
                 sgd.intercept_ = iter_intercepts
-                iter_scores += [sgd.score(X_test, y_test)]
+                #iter_scores += [sgd.score(X_test, y_test)]
 
         scores += [iter_scores]
 
@@ -160,6 +156,7 @@ def plot_scores(scores, agg_only=True):
             plt.plot(range(len(s)), s)
     plt.figure(1)
     plt.plot(range(len(scores[-1])), scores[-1], '--')
+
 
 
 """ Parallel implementation """

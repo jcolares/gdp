@@ -1,0 +1,609 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Gradiente Descendente Paralelo \n",
+    "#### Estudo de Abordagens de Implementação\n",
+    "---\n",
+    "**Créditos:**\n",
+    " Adaptação do código original desenvolvido por [Angad Gill](https://github.com/angadgill) e [Sharath Rao](https://github.com/sharathrao13) com base no paper de Zinkevich, M., Weimer, M., Li, L., & Smola, A. (2010). [Parallelized stochastic gradient descent](http://papers.nips.cc/paper/4006-parallelized-stochastic-gradient-descent). "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Dataset\n",
+    "\n",
+    "Dataset Diamonds, blablablab\n",
+    "~52000 observações com 8 características e preços correspondentes de diamantes, para regressão linear."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%matplotlib inline\n",
+    "from sklearn.datasets import make_regression\n",
+    "from sklearn.model_selection import ShuffleSplit\n",
+    "import numpy as np\n",
+    "from matplotlib import pyplot as plt"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "n_samples = 1000\n",
+    "n_features = 100\n",
+    "seed = 1\n",
+    "effective_rank = 100"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "n_samples = 1000\n",
+    "n_features = 100\n",
+    "seed = 1\n",
+    "effective_rank = 100"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X, y = make_regression(n_samples=n_samples, n_features=n_features, \n",
+    "                       random_state=seed, noise=0.0, effective_rank=effective_rank)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Preparação dos conjuntos para treinamento e testes:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "rs = ShuffleSplit(n_splits=5, test_size=.2, random_state=0)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [],
+   "source": [
+    "for train_index, test_index in rs.split(X):\n",
+    "    pass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X_train = X[train_index]\n",
+    "X_test = X[test_index]\n",
+    "y_train = y[train_index]\n",
+    "y_test = y[test_index]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## \n",
+    "## SGD \"Normal\" (baseline)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Treinameno do modelo com coleta da taxa de acurácia a cada iteração:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn.linear_model import SGDRegressor"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Número máximo de iterações:\n",
+    "n_iter = 5000"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Modelo dde regressão do SciKit-Learn\n",
+    "sgd = SGDRegressor(max_iter = n_iter, tol = 0.001)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "CPU times: user 558 ms, sys: 3.98 ms, total: 561 ms\n",
+      "Wall time: 563 ms\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "SGDRegressor(alpha=0.0001, average=False, early_stopping=False, epsilon=0.1,\n",
+       "       eta0=0.01, fit_intercept=True, l1_ratio=0.15,\n",
+       "       learning_rate='invscaling', loss='squared_loss', max_iter=5000,\n",
+       "       n_iter=None, n_iter_no_change=5, penalty='l2', power_t=0.25,\n",
+       "       random_state=None, shuffle=True, tol=0.001, validation_fraction=0.1,\n",
+       "       verbose=0, warm_start=False)"
+      ]
+     },
+     "execution_count": 34,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Treinamento do modelo e estatísticas\n",
+    "%time sgd.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Acurácia \n",
+    "sgd.score(X_test, y_test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Availiação\n",
+    "scores_base = []\n",
+    "sgd = SGDRegressor(max_iter=1, tol=0.001, warm_start=True)\n",
+    "for i in range(n_iter):\n",
+    "    sgd.partial_fit(X_train, y_train)\n",
+    "    scores_base += [sgd.score(X_test, y_test)]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[<matplotlib.lines.Line2D at 0x7f0ce1e13c18>]"
+      ]
+     },
+     "execution_count": 38,
+     "metadata": {},
+     "output_type": "execute_result"
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "plt.plot(range(len(scores_base)), scores_base)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0.7492405508612383"
+      ]
+     },
+     "execution_count": 35,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# acurácia final, obtida sobre o conjunto de testes:\n",
+    "scores_base[-1]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "\n",
+    "# SGD Paralelo\n",
+    "Comparação de diferentes abordagens de paralelização"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 47,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<module 'utils' from '/home/jeff/github/pgd_samples/Parallel-SGD/utils.py'>"
+      ]
+     },
+     "execution_count": 47,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "from joblib import Parallel, delayed\n",
+    "import utils\n",
+    "import importlib\n",
+    "importlib.reload(utils)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Cenário 1\n",
+    "Neste cenário o dataset é dividido em partes iguais e cada uma é atribuída a um worker. Os pesos (parâmetros) finais são calculados uma única vez quando todos terminam o processamento."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "dados para o fitting\n",
+      "[ 6.22979323e+00  1.47163803e+00 -4.71984329e+00 -1.48215571e+00\n",
+      "  3.78644763e+00 -6.16031780e+00  4.40921574e+00  2.47251749e+00\n",
+      "  2.27713092e+00 -2.67999345e+00  1.59545215e+00  1.85318493e+00\n",
+      "  1.09421378e+00  4.15966302e+00 -3.11244615e+00 -2.40627077e+00\n",
+      " -2.95918412e+00 -7.93459633e+00  5.95704027e+00  4.31018541e+00\n",
+      " -2.17064415e+00  1.83722273e+00 -1.01204124e+00  5.24296751e+00\n",
+      "  1.06168539e+00 -3.02776688e+00  2.33235638e+00  1.65040726e+00\n",
+      " -2.59929647e+00 -4.75019164e+00  1.97405785e+00 -3.28902017e+00\n",
+      " -2.63247409e+00 -4.58835529e+00 -2.65208878e+00 -6.06534116e+00\n",
+      " -2.64714613e+00 -7.31272556e+00 -2.03872872e+00  1.11610377e+01\n",
+      " -1.04808492e+00 -2.31385366e+00  5.96620095e+00 -1.19117752e+00\n",
+      " -1.26744680e+00  1.92092598e+00  2.31001767e+00 -2.75229157e+00\n",
+      "  3.17791753e+00 -7.54427986e+00  1.58661828e+00  1.29479307e+00\n",
+      "  4.12066887e+00 -5.46071984e-01  8.02315381e+00  3.54912624e+00\n",
+      "  1.71883854e+00  9.67392838e-01  6.58954184e+00 -9.45977148e+00\n",
+      "  4.86780277e+00 -5.54802080e-01 -8.46186144e+00 -1.91160268e+00\n",
+      " -4.68356567e+00  9.03024952e+00  2.39025988e+00 -1.10562983e+00\n",
+      " -9.82413480e-01 -1.32038770e-01 -2.87901326e+00 -2.87941988e+00\n",
+      "  4.87849377e+00 -6.60818142e+00 -4.62045840e+00 -6.22456380e+00\n",
+      " -1.72907963e+00  1.04275473e+01  3.00503052e+00 -2.53238977e+00\n",
+      "  1.45386392e+00  1.83061332e+00 -2.21576268e+00  1.69521222e+00\n",
+      "  2.17790480e+00  5.10673555e+00  3.39105144e+00  3.23518600e-01\n",
+      " -1.08858350e-01  5.24738300e+00  4.11773438e+00 -4.33388986e-01\n",
+      "  2.98193534e+00  1.09615344e+01  5.54973258e-02  7.48003143e+00\n",
+      " -2.34089839e+00  8.62657026e+00  1.94930749e+00 -3.22223319e+00\n",
+      " -1.64028015e+00  3.06635011e+00  1.67373305e-01  2.98747739e+00\n",
+      " -9.21791590e+00  4.62650623e+00  6.30284090e-01 -3.36609833e+00\n",
+      "  8.81392581e+00  2.55609481e+00  5.26837469e+00 -1.91311412e+00\n",
+      "  4.32616597e+00 -1.26906867e+00 -3.54909397e+00  3.90479894e+00\n",
+      " -1.93111256e+00 -1.85156360e-01  6.80561669e+00 -3.39509906e+00\n",
+      "  1.50471365e+00  3.80541974e+00 -2.02183667e+00 -3.92964399e+00\n",
+      " -2.64838410e+00  5.32237733e+00 -3.84735041e-02 -1.17174856e+00\n",
+      " -5.28772085e-01 -1.55946465e+00  3.01408357e+00 -7.29958929e+00\n",
+      "  2.68040281e+00 -4.87599131e-01  2.51108364e-01  6.60720781e-02\n",
+      "  1.47530138e-01 -6.72560616e-01 -6.73875984e+00  2.28189949e+00\n",
+      "  5.85745837e+00  4.72530092e+00 -1.15161584e+00  2.12256007e+00\n",
+      "  6.60944757e-01  3.56595269e+00 -7.38618274e+00 -2.02920648e+00\n",
+      " -2.90365283e+00  2.62876688e+00  1.96215034e+00 -1.07662649e+01\n",
+      "  8.47828746e-01 -8.48398544e+00  6.49900071e-01 -7.04596400e-01\n",
+      " -8.22357876e+00 -3.42734567e+00 -3.87900830e-01  5.72628617e+00\n",
+      " -3.42152903e+00  8.43473827e+00 -1.22594795e+00  5.87878669e-03\n",
+      " -4.92076774e+00  3.74543936e+00  2.97163001e+00 -3.00385462e+00\n",
+      " -7.08949678e+00  4.06943809e+00  7.39597268e+00  1.48736161e+00\n",
+      "  5.66104262e+00 -8.24540218e+00  3.99507644e+00 -2.60453466e+00\n",
+      " -8.33997563e+00 -3.14278437e+00 -3.03027238e+00 -1.18213155e+00\n",
+      "  3.32725614e+00 -3.88776536e+00 -2.40649272e+00  5.22215721e+00\n",
+      "  3.24293613e+00  1.17011295e+01  4.11524703e+00  1.35028230e-01\n",
+      " -2.82031129e+00  3.08764768e+00 -2.66456995e+00 -3.99088379e+00\n",
+      " -1.31130150e-01  3.65161749e+00 -2.26682994e+00 -9.33845067e+00\n",
+      "  2.23918348e+00  1.84053933e+00 -1.74655667e+00  5.05174230e+00] [[ 0.04776248  0.02541145 -0.0330006  ... -0.01262924  0.00697496\n",
+      "  -0.01537689]\n",
+      " [ 0.01016286 -0.04650205 -0.04347952 ...  0.00570865  0.03691913\n",
+      "  -0.0006511 ]\n",
+      " [-0.03348944  0.03093284  0.03244989 ... -0.00541535  0.03356245\n",
+      "  -0.00735819]\n",
+      " ...\n",
+      " [ 0.03784436 -0.0235867  -0.01692887 ... -0.04418139  0.03322888\n",
+      "  -0.01702352]\n",
+      " [-0.01664086  0.00353477 -0.03064382 ... -0.04721573  0.01959344\n",
+      "  -0.03303296]\n",
+      " [ 0.00571626 -0.02358585  0.02238868 ...  0.04808666  0.02055336\n",
+      "   0.00807599]]\n",
+      "Fex fitting com os dados\n",
+      "dados para o fitting\n",
+      "[ -2.50478627  -4.4828399   -0.91221662   4.66437312  -4.97721971\n",
+      "  -0.03754437   2.14762378  -0.09460616  -3.67906275  -9.24766483\n",
+      "   6.42080369  -3.90721867  -3.6457182   -0.64010177  -1.77810973\n",
+      "   3.76100475  -2.80117349  -4.11353559  -2.81739505  -7.895939\n",
+      "   3.69138197   0.55172482  -0.23132617   0.83447912   3.41366266\n",
+      "   3.71917908  -7.08760223  -3.8059069    0.05069095  -5.88792973\n",
+      "  -1.00185526  -6.142439     4.78080541  -5.1027583   -1.76430066\n",
+      "   3.33488565  -2.05224847   1.58592434   1.66688154  -4.2861053\n",
+      "  -3.36846798   2.38466467  -2.44795627   0.4726922    0.63405614\n",
+      "   0.61986547   1.38769006  -0.30996383   1.25014118  -2.84847296\n",
+      "   4.61659748  -0.89213609  -1.72221139  -0.13901597  -8.26336231\n",
+      "   2.01862959   6.10128322   6.00965189   0.27603409  -1.37078098\n",
+      "   2.50458148   1.66911852   1.18963979   0.10200261   0.2343213\n",
+      "   0.8639323    3.61882784  -1.58597677  -8.6127877    1.61184661\n",
+      "   1.3652048   -2.59512989  -1.25894032  -3.29895677  -2.1522279\n",
+      "   2.49561673  10.01250489   0.45706876  -3.4251689    2.21131197\n",
+      "   4.69914114  -4.58916418   5.68732549   3.34487357  -5.32256482\n",
+      "  -1.01918815  -9.66784208  -0.88160759   4.22067244   1.66469375\n",
+      "   0.56533454  -1.10415593   3.01766304  -7.35980053   1.44582826\n",
+      "  -0.23024935   1.67458154  -1.35552254  -6.78401971  -3.83413429\n",
+      "  -1.44870185   5.79034136  -5.77480605   0.87886331   2.48052559\n",
+      "   1.41086395   3.29206516   4.89407845   1.64884667  -7.5102629\n",
+      "  -1.27368855   2.08606425   0.40667897   1.56176308  -6.32654255\n",
+      "  -1.18597455   4.0381046   -4.34369477   6.02435367  -9.62286632\n",
+      "  -2.51013061  -0.42186195   0.90727309  -3.1340047    2.65828584\n",
+      "   4.1508256    3.03453105  -1.84726755   0.53488622  -0.33246033\n",
+      "  -2.96602459  -3.91961279  -6.06050382  -3.23490419   1.93003631\n",
+      "  -3.15654487  -6.87272337  -2.68002488  -9.3186775   -8.16101132\n",
+      "   2.10585618  -0.97101478   2.18400298  -6.00139107  -4.88766836\n",
+      "   0.55842678  -1.02996137  -2.61959402  -5.48508752  10.32928441\n",
+      "  -7.35822908  -9.96734695   5.47369068   1.3842303   -4.14515815\n",
+      "  -2.50959766  -5.18842309   0.77807803   1.20577661   0.87397626\n",
+      "   2.40878074   6.63779825   2.87150004   0.5836971   -2.01434734\n",
+      "   0.02626274  -0.19904255   3.9124187  -11.72081548   3.44378602\n",
+      "   2.01667302  -3.72839984  -0.49470928  -0.14327543   2.73824412\n",
+      "  -3.02668703   4.77663586   0.88951238  -7.84287627  -1.39256293\n",
+      "   3.09814779  -2.72486869  -0.13378531  -2.84998201  -1.97567527\n",
+      "  -2.10818688   2.937231    -0.92033047   0.49849786  -3.1277492\n",
+      "  -0.82795919   6.64172951   0.39045531  -8.92423459  -3.21589035\n",
+      "   1.58039101  -5.29869805  -1.5141498    4.64643468  -4.23704733] [[-0.06574392  0.01425726  0.00402871 ...  0.01733263  0.02453708\n",
+      "   0.01929201]\n",
+      " [-0.01804697  0.00987827  0.00398468 ... -0.01859038 -0.00471672\n",
+      "   0.00496758]\n",
+      " [ 0.00431913 -0.0043776  -0.0517265  ...  0.01138295 -0.00510928\n",
+      "   0.00877359]\n",
+      " ...\n",
+      " [-0.00449394  0.02795511  0.03085569 ...  0.00983952 -0.01353167\n",
+      "   0.01784944]\n",
+      " [ 0.00596589 -0.00870183 -0.02203823 ...  0.0343577  -0.01136814\n",
+      "   0.01914203]\n",
+      " [ 0.02899076 -0.03169893  0.01185285 ... -0.04770398 -0.00487323\n",
+      "  -0.03124701]]\n",
+      "Fex fitting com os dados\n",
+      "dados para o fitting\n",
+      "[ -3.17059773  -3.67615761   2.35753689  -1.5364437    2.87864905\n",
+      "   2.31947503  -2.52429538  -5.16517425   4.20024486  -8.40982534\n",
+      "   5.21350935  -7.34612301  -3.77963972   7.30178809   4.68226959\n",
+      "   5.24027491  -0.68209409  -2.26171736  -0.9477522   -1.599836\n",
+      "   3.46947641  -0.5263896   -3.40435659   4.80894543  -0.37462446\n",
+      "  -6.59617205   0.41339743   2.65214904   1.64157794  -4.07970127\n",
+      "   2.65918811  -3.54681914   0.11184541  -1.04076418   8.66039739\n",
+      "   5.22847296   2.55338141  -0.67610683   7.580071     1.8232932\n",
+      "   2.743751    -3.91671733 -10.76327561  -6.27925738  -5.30666028\n",
+      "   1.20424179   1.48260379   2.47637129  -6.33917462   2.47430675\n",
+      "  -7.09050695   0.05191436   6.15067162   5.01602963  -1.16517458\n",
+      "   6.2741666    0.57089538  -1.78244975  -7.62188528   1.23590893\n",
+      "  -1.15354553  -6.4517454   -0.04386149  -4.13538099   1.67524774\n",
+      "  -0.57637917   2.59505697   2.17530368   5.26736811  -1.22691278\n",
+      "   6.76963663   1.5175862    4.11070766   0.5945522   -3.99677667\n",
+      "  -4.7000937    6.03771576   4.5263647    1.0098631    4.88468312\n",
+      "  -2.0660426   -5.14910419  -2.72404844   6.18933406  -2.61440787\n",
+      "   4.79561998   0.78386554  -0.11187661   3.80869881  -2.58713394\n",
+      "   0.84769436   1.87870552  -0.35388935   8.72656142  -4.3623436\n",
+      "   0.38618309   1.31677168  -2.16769499  -1.26105767  -3.82544752\n",
+      "   6.75744115  -2.98352902   1.19264637   6.91802681   3.83091854\n",
+      "  -1.15683147  -3.24605057  -1.20492665   4.74983976   6.44480073\n",
+      "   0.86903026   3.69291553   1.67592877  -0.07114279   1.33651113\n",
+      "   1.44208091  -1.10824003  -6.42041959  -3.9699574    2.915014\n",
+      "   1.66751224   6.89035322   1.72578389  -4.40379982   4.10530372\n",
+      "  -2.587216     1.62291422   1.1802742   -1.2522282    2.08660501\n",
+      "  -7.34081047   0.41941141   8.74487182  -3.7903204    2.78743697\n",
+      "  -5.21395611  -6.60645152   2.52825654  -3.6418448    0.61139258\n",
+      "  -2.38842206   7.63478839   2.93084594  -4.47755687  -1.95332117\n",
+      "  -4.81612183  -3.5821253   -1.51669631   3.53491161   1.8274378\n",
+      "   3.78764279   3.64438776   5.16619087  -3.75709     -0.17403317\n",
+      "   5.06812213  -3.01755686   8.00085796  -0.87236925   4.45947526\n",
+      "  -1.86480849  -0.65656456   2.67251773  13.19737334  -0.59687398\n",
+      "  -0.37080957   2.35457332   5.23018326   3.30485197  -3.79204158\n",
+      "  -4.81267018   6.30983253   3.8855475    3.97385123   1.88125425\n",
+      "  -3.26301906  -0.22093566  -0.08369667  -6.12179906  -3.52764271\n",
+      "   3.34525719  -0.15065303   4.72078726  -5.80872818  -0.78469761\n",
+      "   0.36331967   6.71149563  -4.99103982   0.28244476  -2.48522338\n",
+      "  -5.26012818  -0.06802277   4.30362735  -1.81801086   6.1431808\n",
+      "   2.81032932  -0.17501236  -6.11875077   4.16378039  -3.20207778] [[-0.01992502  0.00036732 -0.00264039 ...  0.04406809 -0.00048096\n",
+      "   0.00309589]\n",
+      " [ 0.01586312 -0.0139092  -0.03445363 ... -0.00623167  0.00148255\n",
+      "  -0.03469309]\n",
+      " [ 0.00763103 -0.02698119  0.01358055 ... -0.01447808  0.03244359\n",
+      "   0.00464047]\n",
+      " ...\n",
+      " [ 0.02412489 -0.02857508  0.02182393 ...  0.00035583  0.03050098\n",
+      "   0.03413965]\n",
+      " [-0.01859306 -0.00827014  0.03808395 ... -0.00736227  0.04763893\n",
+      "  -0.032962  ]\n",
+      " [-0.01139334  0.00710976 -0.02023978 ... -0.01999489  0.03876956\n",
+      "   0.04366573]]\n",
+      "Fex fitting com os dados\n",
+      "dados para o fitting\n",
+      "[ 2.84724758e+00  3.32445387e+00 -3.17726009e-01  7.18505967e+00\n",
+      " -2.38682568e+00  2.72942847e+00 -9.12082152e+00  1.42157092e+00\n",
+      " -1.50812007e+00  7.35227139e+00 -5.60908143e-01 -1.12494744e+00\n",
+      "  4.51672781e+00  6.61056743e-01 -3.46142621e+00 -2.26571789e-01\n",
+      " -1.25407901e+00 -6.15349457e+00 -6.21752266e+00 -5.97168549e-01\n",
+      "  3.21272970e+00  2.03935400e+00  1.88481266e+00  1.60098391e+00\n",
+      "  2.10134780e+00 -3.43146599e+00  1.13901950e+00 -1.69226663e+00\n",
+      " -5.04716169e+00  1.30350251e+00  5.89003675e+00 -2.83213964e+00\n",
+      "  3.34522164e+00 -7.17715558e+00 -1.43443611e+00 -4.05215665e-01\n",
+      " -3.32758610e+00  6.35510724e-01 -2.29063098e+00 -8.29713686e-01\n",
+      " -1.11887409e+00 -2.33620597e+00  6.93697958e-01 -3.09892501e-01\n",
+      "  9.01657500e-01  5.73912018e+00  3.25904562e-01  5.34929591e+00\n",
+      "  6.95884313e+00 -1.10328182e+00  8.14223193e-01  5.93506368e+00\n",
+      "  6.84901786e-01  2.24382563e+00 -5.09771497e+00  5.09757967e+00\n",
+      "  4.37021531e+00 -1.32743922e+00  5.25893829e+00  1.65312976e+00\n",
+      " -6.42322056e+00  5.71618317e+00  3.03956700e+00 -1.07573705e+01\n",
+      "  8.13104647e+00 -2.28880935e+00 -2.54233776e+00  2.56400618e+00\n",
+      " -4.04380339e-01 -3.83079424e-01 -7.41074663e-01  2.41561363e+00\n",
+      " -6.23585725e+00  5.32934210e+00 -1.04161319e+00 -5.36810720e+00\n",
+      " -7.57998455e+00 -6.44354514e+00 -7.28778731e+00  2.47479886e-01\n",
+      " -9.28713099e-01 -1.00516217e-03 -7.24205631e-01 -2.88289471e+00\n",
+      "  1.04223221e+01 -3.82789344e+00 -6.27136484e+00 -1.01799611e-01\n",
+      " -4.50482956e+00 -5.12522594e-01 -1.36961673e+00  7.91435800e-01\n",
+      "  4.87058206e+00 -4.55093462e+00  2.16305309e+00  2.71523051e+00\n",
+      "  2.34402577e-01  4.71034425e+00 -6.59361980e-01  2.23915546e+00\n",
+      " -4.83771920e+00 -4.41340115e+00  4.87672348e-01  2.51336863e+00\n",
+      " -5.46524207e+00 -2.02302538e+00 -2.77404738e+00  2.44127608e+00\n",
+      "  1.31225504e+00  1.09688487e+00  1.77182925e+00 -6.78047879e+00\n",
+      "  1.73927239e+00  4.13542733e+00  3.48510565e+00 -5.47913502e+00\n",
+      " -8.71281415e-02  8.93441558e-01  2.36144917e+00  3.39048435e+00\n",
+      "  6.03277035e+00  8.16456197e-01 -1.17886398e+00  4.09014349e-01\n",
+      " -1.28058166e+00 -5.55546601e-01  5.38845261e+00 -9.67752223e+00\n",
+      " -1.67471782e+00 -3.42730822e+00  1.11454830e+00 -1.61400485e+00\n",
+      "  9.10759926e-01 -8.63826005e+00 -5.88297285e+00 -2.52053256e+00\n",
+      "  1.63664218e+00 -6.33359527e-01  5.96504057e+00 -1.16097500e+00\n",
+      "  7.16256576e+00 -2.73496199e+00 -1.54637088e+00  1.01197304e+00\n",
+      " -8.51056972e+00 -3.81808405e+00 -3.57737968e+00 -3.91555164e+00\n",
+      "  7.30408406e+00 -3.68820796e+00  2.82162016e+00 -1.81101529e+00\n",
+      " -4.92018122e+00  4.28608572e+00 -5.57302289e+00  1.05355733e+00\n",
+      "  9.19351631e-01 -4.64233516e-01 -2.40044550e+00  3.11593406e+00\n",
+      "  8.17839439e+00  2.05776754e+00 -8.99411706e+00 -4.29541014e+00\n",
+      "  2.28615857e+00 -1.42009555e+00 -1.19660864e+00  7.24562571e+00\n",
+      " -1.34913056e+00 -1.60451894e+00 -9.64420952e+00 -4.75713628e+00\n",
+      " -2.10614424e+00  4.97573927e-01 -3.01086413e+00  6.97802904e+00\n",
+      "  3.55809644e+00 -4.64897709e+00 -4.00297481e+00  5.00671147e+00\n",
+      " -4.51870949e-01  2.52715674e+00  8.33903469e+00 -2.11273335e+00\n",
+      " -7.82628848e-02 -5.88757710e+00  1.53123582e+00 -2.20735203e+00\n",
+      " -6.29254741e+00  2.09268372e+00 -4.07768478e+00  5.33335583e-01\n",
+      "  9.21497874e+00 -8.28573461e+00 -3.88336157e+00 -6.10388160e+00\n",
+      " -1.53660449e+00 -4.08566055e+00 -2.16969147e+00  5.37731056e+00] [[ 0.00398742  0.01342806 -0.01815631 ... -0.01052348  0.04123298\n",
+      "   0.01463982]\n",
+      " [ 0.00664093 -0.00961496  0.04819716 ...  0.00522327  0.01895004\n",
+      "   0.01695293]\n",
+      " [-0.01565318 -0.02072016 -0.02331339 ...  0.01074209 -0.04525921\n",
+      "  -0.04199394]\n",
+      " ...\n",
+      " [ 0.01053181  0.03392679  0.01373789 ...  0.00714135  0.00863457\n",
+      "  -0.00976225]\n",
+      " [-0.02382905  0.05061474 -0.01890205 ...  0.03235457 -0.02964676\n",
+      "  -0.01821275]\n",
+      " [-0.01732647 -0.01741703 -0.00402838 ... -0.06761378  0.0083099\n",
+      "  -0.01941221]]\n",
+      "Fex fitting com os dados\n"
+     ]
+    },
+    {
+     "ename": "NotFittedError",
+     "evalue": "This SGDRegressor instance is not fitted yet. Call 'fit' with appropriate arguments before using this method.",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mNotFittedError\u001b[0m                            Traceback (most recent call last)",
+      "\u001b[0;32m<timed exec>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n",
+      "\u001b[0;32m~/github/pgd_samples/Parallel-SGD/utils.py\u001b[0m in \u001b[0;36msim_parallel_sgd\u001b[0;34m(X_train, y_train, X_test, y_test, n_iter, n_jobs, split_per_job, n_sync, overlap, verbose)\u001b[0m\n\u001b[1;32m    124\u001b[0m                 \u001b[0msgd\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcoef_\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0miter_coefs\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    125\u001b[0m                 \u001b[0msgd\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mintercept_\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0miter_intercepts\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 126\u001b[0;31m                 \u001b[0miter_scores\u001b[0m \u001b[0;34m+=\u001b[0m \u001b[0;34m[\u001b[0m\u001b[0msgd\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mscore\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mX_test\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0my_test\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    127\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    128\u001b[0m         \u001b[0mscores\u001b[0m \u001b[0;34m+=\u001b[0m \u001b[0;34m[\u001b[0m\u001b[0miter_scores\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/anaconda3/envs/pgd/lib/python3.6/site-packages/sklearn/base.py\u001b[0m in \u001b[0;36mscore\u001b[0;34m(self, X, y, sample_weight)\u001b[0m\n\u001b[1;32m    326\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    327\u001b[0m         \u001b[0;32mfrom\u001b[0m \u001b[0;34m.\u001b[0m\u001b[0mmetrics\u001b[0m \u001b[0;32mimport\u001b[0m \u001b[0mr2_score\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 328\u001b[0;31m         return r2_score(y, self.predict(X), sample_weight=sample_weight,\n\u001b[0m\u001b[1;32m    329\u001b[0m                         multioutput='variance_weighted')\n\u001b[1;32m    330\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/anaconda3/envs/pgd/lib/python3.6/site-packages/sklearn/linear_model/stochastic_gradient.py\u001b[0m in \u001b[0;36mpredict\u001b[0;34m(self, X)\u001b[0m\n\u001b[1;32m   1284\u001b[0m            \u001b[0mPredicted\u001b[0m \u001b[0mtarget\u001b[0m \u001b[0mvalues\u001b[0m \u001b[0mper\u001b[0m \u001b[0melement\u001b[0m \u001b[0;32min\u001b[0m \u001b[0mX\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   1285\u001b[0m         \"\"\"\n\u001b[0;32m-> 1286\u001b[0;31m         \u001b[0;32mreturn\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_decision_function\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mX\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m   1287\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   1288\u001b[0m     def _fit_regressor(self, X, y, alpha, C, loss, learning_rate,\n",
+      "\u001b[0;32m~/anaconda3/envs/pgd/lib/python3.6/site-packages/sklearn/linear_model/stochastic_gradient.py\u001b[0m in \u001b[0;36m_decision_function\u001b[0;34m(self, X)\u001b[0m\n\u001b[1;32m   1264\u001b[0m            \u001b[0mPredicted\u001b[0m \u001b[0mtarget\u001b[0m \u001b[0mvalues\u001b[0m \u001b[0mper\u001b[0m \u001b[0melement\u001b[0m \u001b[0;32min\u001b[0m \u001b[0mX\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   1265\u001b[0m         \"\"\"\n\u001b[0;32m-> 1266\u001b[0;31m         \u001b[0mcheck_is_fitted\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m[\u001b[0m\u001b[0;34m\"t_\"\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m\"coef_\"\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m\"intercept_\"\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mall_or_any\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mall\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m   1267\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   1268\u001b[0m         \u001b[0mX\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mcheck_array\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mX\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0maccept_sparse\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m'csr'\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/anaconda3/envs/pgd/lib/python3.6/site-packages/sklearn/utils/validation.py\u001b[0m in \u001b[0;36mcheck_is_fitted\u001b[0;34m(estimator, attributes, msg, all_or_any)\u001b[0m\n\u001b[1;32m    949\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    950\u001b[0m     \u001b[0;32mif\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0mall_or_any\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0mhasattr\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mestimator\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mattr\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;32mfor\u001b[0m \u001b[0mattr\u001b[0m \u001b[0;32min\u001b[0m \u001b[0mattributes\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 951\u001b[0;31m         \u001b[0;32mraise\u001b[0m \u001b[0mNotFittedError\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mmsg\u001b[0m \u001b[0;34m%\u001b[0m \u001b[0;34m{\u001b[0m\u001b[0;34m'name'\u001b[0m\u001b[0;34m:\u001b[0m \u001b[0mtype\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mestimator\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m__name__\u001b[0m\u001b[0;34m}\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    952\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    953\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;31mNotFittedError\u001b[0m: This SGDRegressor instance is not fitted yet. Call 'fit' with appropriate arguments before using this method."
+     ]
+    }
+   ],
+   "source": [
+    "# Quantidade de workers\n",
+    "n_jobs = 4\n",
+    "\n",
+    "# Treinamento\n",
+    "%time scores = utils.sim_parallel_sgd(X_train, y_train, X_test, y_test, n_iter, n_jobs, split_per_job=1/n_jobs, overlap=False)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.6"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
