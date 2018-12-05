@@ -430,3 +430,33 @@ def plot_speedup_acc(speedup_acc, score1):
     plt.xticks(np.arange(0,num_procs+1, 0.5))
     plt.ylabel("Accuracy")
     plt.yticks(np.arange(0,1.25, 0.25))
+
+def computeCost(X, y, theta=[[0],[0]]):
+    m = y.size
+    J = 0  
+    h = X.dot(theta) 
+    J = 1/(2*m)*np.sum(np.square(h-y)) 
+    return(J)
+
+def plot_contour(X,y,theta,label=0):
+        # Create grid coordinates for plotting
+    theta_0 = np.linspace(-20, 20, 50)
+    theta_1 = np.linspace(-20, 20, 50)
+    theta_x, theta_y = np.meshgrid(theta_0, theta_0, indexing='xy')
+    Z = np.zeros((theta_0.size,theta_1.size))
+
+
+
+    # Calculate Z-values (Cost) based on grid of coefficients
+    for (i,j),v in np.ndenumerate(Z):
+        Z[i,j] = computeCost(X,y, theta=[[theta_x[i,j]], [theta_y[i,j]]])
+    
+
+    plt.figure()
+    fig, ax = plt.subplots()
+    CS = ax.contour(theta_x, theta_y, Z, np.logspace(np.log10(np.amin(Z)-1),np.log10(np.amax(Z)+1),15))
+    ax.clabel(CS, inline=1, fontsize=10)
+    ax.scatter(theta[0],theta[1], c='r')
+    ax.set_title('Curvas de nível (label: {})'.format(label))
+    ax.set_xlabel(r'$\theta_0$')
+    ax.set_ylabel(r'$\theta_1$')
