@@ -89,6 +89,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
 
     """ Simulate parallel execution """
     scores = []  # List containing final output
+    costs = []
 
     sgds = []  # List of SGDRegressor objects for each "worker"
     for n in range(n_jobs):
@@ -106,6 +107,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
         iter_scores = []
         iter_coefs = []
         iter_intercepts = []
+        iter_costs = []
 
         for n, sgd in enumerate(sgds):  # Fit model for each "worker" one-by-by
             if n < n_jobs:
@@ -113,8 +115,10 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
                 iter_scores += [sgd.score(X_test, y_test)]
                 iter_coefs += [sgd.coef_]
                 iter_intercepts += [sgd.intercept_]
+                iter_costs += [computeCost(X_test,y_test,sgd.coef_)]
             else:
                 # Calcuate aggregate score for this iteration
+                iter_costs = np.mean(np.array((iter_costs)),axis=0)
                 iter_coefs = np.mean(np.array(iter_coefs), axis=0)
                 iter_intercepts = np.mean(np.array(iter_intercepts), axis=0)
                 sgd.coef_ = iter_coefs
@@ -122,6 +126,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
                 #iter_scores += [sgd.score(X_test, y_test)]
 
         scores += [iter_scores]
+        costs += [iter_costs]
 
         if i % int(n_iter/n_sync) == 0 and i != 0:  # Sync weights every (n_iter/n_sync) iterations
             if verbose:
@@ -130,7 +135,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
                 sgd.coef_ = iter_coefs
                 sgd.intercept_ = iter_intercepts
 
-    return scores
+    return scores, costs, sgd.coef_
 
 
 def plot_scores(scores, agg_only=True):
