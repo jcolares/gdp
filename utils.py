@@ -23,6 +23,8 @@ from joblib import Parallel, delayed
 import threading
 
 
+
+
 def split_data(X_train, y_train, n_jobs, split_per_job, overlap=False):
     """
     Split the data across workers. Outputs a nested list of X_train and y_train
@@ -108,6 +110,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
         iter_coefs = []
         iter_intercepts = []
         iter_costs = []
+
 
         for n, sgd in enumerate(sgds):  # Fit model for each "worker" one-by-by
             if n < n_jobs:
@@ -446,8 +449,8 @@ def computeCost(X, y, theta=[[0],[0]]):
 
 def plot_contour(X,y,theta,label=0):
         # Create grid coordinates for plotting
-    theta_0 = np.linspace(-2, 2, 50)
-    theta_1 = np.linspace(-2, 2, 50)
+    theta_0 = np.linspace(-0.5, 0.5, 50)
+    theta_1 = np.linspace(-0.5, 0.5, 50)
     theta_x, theta_y = np.meshgrid(theta_0, theta_0, indexing='xy')
     Z = np.zeros((theta_0.size,theta_1.size))
 
