@@ -90,7 +90,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
     """ Simulate parallel execution """
     scores = []  # List containing final output
     costs = []
-
+    thetas = []
     sgds = []  # List of SGDRegressor objects for each "worker"
     for n in range(n_jobs):
         # warm_start=True is important for iterative training
@@ -127,6 +127,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
 
         scores += [iter_scores]
         costs += [iter_costs]
+        thetas += [sgd.coef_]
 
         if i % int(n_iter/n_sync) == 0 and i != 0:  # Sync weights every (n_iter/n_sync) iterations
             if verbose:
@@ -135,7 +136,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
                 sgd.coef_ = iter_coefs
                 sgd.intercept_ = iter_intercepts
 
-    return scores, costs, sgd.coef_
+    return scores, costs, thetas
 
 
 def plot_scores(scores, agg_only=True):
@@ -445,8 +446,8 @@ def computeCost(X, y, theta=[[0],[0]]):
 
 def plot_contour(X,y,theta,label=0):
         # Create grid coordinates for plotting
-    theta_0 = np.linspace(-20, 20, 50)
-    theta_1 = np.linspace(-20, 20, 50)
+    theta_0 = np.linspace(-2, 2, 50)
+    theta_1 = np.linspace(-2, 2, 50)
     theta_x, theta_y = np.meshgrid(theta_0, theta_0, indexing='xy')
     Z = np.zeros((theta_0.size,theta_1.size))
 
@@ -461,7 +462,9 @@ def plot_contour(X,y,theta,label=0):
     fig, ax = plt.subplots()
     CS = ax.contour(theta_x, theta_y, Z, np.logspace(np.log10(np.amin(Z)-1),np.log10(np.amax(Z)+1),15))
     ax.clabel(CS, inline=1, fontsize=10)
-    ax.scatter(theta[0],theta[1], c='r')
+    for t in theta:
+        ax.scatter(t[0],t[1], c='r')
+    
     ax.set_title('Curvas de nível (label: {})'.format(label))
     ax.set_xlabel(r'$\theta_0$')
     ax.set_ylabel(r'$\theta_1$')
