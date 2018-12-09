@@ -279,7 +279,6 @@ def sim_parallel_sgd_c4(X_train, y_train, X_test, y_test,
     """ Simulate parallel execution """
     scores = pymp.shared.array((n_iter,n_jobs))  # List containing final output
     costs = pymp.shared.array((n_iter,n_jobs))
-    #thetas = pymp.shared.array((n_iter,X_train.shape[1]))
     sgds = []  # List of SGDRegressor objects for each "worker" (firstPrivet)
     for n in range(n_jobs):
         sgds += [SGDRegressor(max_iter=1, tol=0.001, warm_start=True)]
