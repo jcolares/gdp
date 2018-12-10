@@ -19,11 +19,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from sklearn.linear_model import SGDRegressor
-from joblib import Parallel, delayed
-import threading
 
-
-
+import pymp
 
 def split_data(X_train, y_train, n_jobs, split_per_job, overlap=False):
     """
@@ -57,7 +54,6 @@ def split_data(X_train, y_train, n_jobs, split_per_job, overlap=False):
         data = list(data)
     return data
 
-
 def sim_parallel_sgd(X_train, y_train, X_test, y_test,
                      n_iter, n_jobs, split_per_job, n_sync=1,
                      overlap=False, verbose=False):
@@ -89,17 +85,22 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
     """ Split data """
     data = split_data(X_train, y_train, n_jobs, split_per_job, overlap)
 
+    
     """ Simulate parallel execution """
     scores = []  # List containing final output
     costs = []
     thetas = []
     sgds = []  # List of SGDRegressor objects for each "worker"
+
+
     for n in range(n_jobs):
         # warm_start=True is important for iterative training
         # sgds += [SGDRegressor(n_iter=1, warm_start=True)]
         sgds += [SGDRegressor(max_iter=1, tol=0.001, warm_start=True)]
     #sgds += [SGDRegressor()]  # For calculating aggregate score for each iteration
     sgds += [SGDRegressor()]  # For calculating aggregate score for each iteration
+
+
 
     for i in range(n_iter):  # Execute iterations one-by-one
         if verbose:
@@ -110,7 +111,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
         iter_coefs = []
         iter_intercepts = []
         iter_costs = []
-
+        
 
         for n, sgd in enumerate(sgds):  # Fit model for each "worker" one-by-by
             if n < n_jobs:
@@ -119,6 +120,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
                 iter_coefs += [sgd.coef_]
                 iter_intercepts += [sgd.intercept_]
                 iter_costs += [computeCost(X_test,y_test,sgd.coef_)]
+
             else:
                 # Calcuate aggregate score for this iteration
                 iter_costs = np.mean(np.array((iter_costs)),axis=0)
@@ -141,6 +143,176 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
 
     return scores, costs, thetas
 
+def sim_parallel_sgd_parallel(X_train, y_train, X_test, y_test,
+                     n_iter, n_jobs, split_per_job, n_sync=1,
+                     overlap=False, verbose=False, sync_type=0):
+    """
+    paraleliza todo data set
+    parallel execution of SGDRegressor. 
+
+    Parameters
+    ----------
+    X_train: Input training data. May be split across workers, see split_per_job
+    y_train: Target training data
+    X_test: Input test data. Used by all workers
+    y_test: Target test data
+    n_iter: Number of iterations for each worker
+    n_jobs: Number of simulated workers
+    n_sync: Number of times weights should be syncrhonized, including the one at the end
+    split_per_job: Fraction of input data that each worker should have
+    overlap: Bool. Should there be overlap in the data split across workers, i.e. should the function use bootstraping
+    sync_type: if 0 sync by the mean, if 1 sync by min cost
+
+    Returns
+    -------
+    scores: nested list of scores of each machine in each iteration
+        Each element contains scores for each machine. The last being the aggregate score
+        e.g.: [[machine 1 score in iter 1, machine 2 score in iter 1, ..., aggregate score in iter 1]
+               [machine 1 score in iter 2, machine 2 score in iter 2, ..., aggregate score in iter 2]
+               ...
+               [machine 1 score in iter n, machine 2 score in iter n, ..., aggregate score in iter n]]
+    """
+
+    """ Split data """
+    data = split_data(X_train, y_train, n_jobs, split_per_job, overlap)
+    n_perSync = int(n_iter/n_sync)
+
+    """Check if compatible"""
+    if (n_perSync*n_sync != n_iter):
+        print("n_perSync:{}|n_sync:{}|n_iter:{}".format(n_perSync,n_sync,n_iter))
+        raise Exception("Number of syncs has to be multiple of number of iter")
+
+    """ Simulate parallel execution """
+    scores = pymp.shared.array((n_iter,n_jobs))  # List containing final output
+    costs = pymp.shared.array((n_iter,n_jobs))
+    sgds = []  # List of SGDRegressor objects for each "worker" (firstPrivet)
+    for n in range(n_jobs):
+        sgds += [SGDRegressor(max_iter=1, tol=0.001, warm_start=True)]
+    
+    n_features = len(data[n][0][0])
+
+    for s in range(n_sync):
+        if verbose:
+            stdout.write(f"sync: {s} de {n_sync}")
+            stdout.write('\r')
+        coefs = pymp.shared.array((n_jobs,n_features))
+        intercepts = pymp.shared.array((n_jobs,1))
+
+        with pymp.Parallel(n_jobs) as p:
+            for i in range(n_perSync):
+                sgds[p.thread_num].partial_fit(data[p.thread_num][0], data[p.thread_num][1])  # partial_fit() allows iterative training
+                scores[n_perSync*s+i][p.thread_num] = sgds[p.thread_num].score(X_test, y_test) 
+                costs[n_perSync*s+i][p.thread_num] = computeCost(X_test,y_test,sgds[p.thread_num].coef_)
+                if i == n_perSync-1:
+                    #print(coefs[p.thread_num])
+                    coefs[p.thread_num] = sgds[p.thread_num].coef_
+                    intercepts[p.thread_num] = sgds[p.thread_num].intercept_
+
+        #sincronização
+        if sync_type == 0: #sincronia pela media 
+            iter_coefs = np.mean(coefs,axis=0)
+            iter_intercepts = np.mean(intercepts,axis=0)
+        if sync_type == 1: #sincronia pelo minimo
+            index = np.argmin(costs[n_perSync*(s+1)-1])
+            iter_coefs = coefs[index]
+            iter_intercepts = intercepts[index]
+
+        
+
+        if verbose:
+            if s != n_sync-1: #não printa a última iteração, pros casos de não usar o sync
+                print("Synced at iteration:", n_perSync*s+i+1)
+        for sgd in sgds:  # Iterate through all workers except the last (which is used for aggregates)
+            sgd.coef_ = iter_coefs
+            sgd.intercept_ = iter_intercepts
+
+    costs = np.mean(costs,axis=1)
+    return scores, costs, 1
+
+def hogwild(X_train, y_train, X_test, y_test,
+                     n_iter, n_jobs, split_per_job, n_sync=1,
+                     overlap=False, verbose=False, sync_type=0):
+    """
+    paraleliza todo data set
+    parallel execution of SGDRegressor. 
+
+    Parameters
+    ----------
+    X_train: Input training data. May be split across workers, see split_per_job
+    y_train: Target training data
+    X_test: Input test data. Used by all workers
+    y_test: Target test data
+    n_iter: Number of iterations for each worker
+    n_jobs: Number of simulated workers
+    n_sync: Number of times weights should be syncrhonized, including the one at the end
+    split_per_job: Fraction of input data that each worker should have
+    overlap: Bool. Should there be overlap in the data split across workers, i.e. should the function use bootstraping
+    sync_type: if 0 sync by the mean, if 1 sync by min cost
+
+    Returns
+    -------
+    scores: nested list of scores of each machine in each iteration
+        Each element contains scores for each machine. The last being the aggregate score
+        e.g.: [[machine 1 score in iter 1, machine 2 score in iter 1, ..., aggregate score in iter 1]
+               [machine 1 score in iter 2, machine 2 score in iter 2, ..., aggregate score in iter 2]
+               ...
+               [machine 1 score in iter n, machine 2 score in iter n, ..., aggregate score in iter n]]
+    """
+
+    """ Split data """
+    #data = split_data(X_train, y_train, n_jobs, split_per_job, overlap)
+ 
+    """ parallel execution """
+    scores = pymp.shared.array((n_iter,n_jobs))  # List containing final output
+    costs = pymp.shared.array((n_iter,n_jobs))
+   
+    #n_features = len(data[0][0][0])
+
+    coef = pymp.shared.array((X_train.shape[1]))
+    intercept = pymp.shared.array(1)
+    cost = pymp.shared.array(1)
+    cost[0] = 99999
+    #data = pymp.shared.array((X_train.shape[1]+2)) #[coef [intercept] [cost]
+
+    with pymp.Parallel(n_jobs) as p:
+        sgd_job = SGDRegressor(max_iter=1, tol=0.001, warm_start=True) #private
+
+        for i in range(n_iter):
+        
+            #p.print(f"P:{p.thread_num}| i:{i}")
+            if i != 0:
+                #p.print(f"i:{i}| p1:{p.thread_num}|sgd_job.intercept_:{sgd_job.intercept_}")
+                sgd_job.coef_ = coef
+                sgd_job.intercept_ = intercept
+                #p.print(f"i:{i}| p2:{p.thread_num}|sgd_job.intercept_:{sgd_job.intercept_}")
+            #p.print(f"coef[0]:{len(coef[0])}| coef:{len(coef)}|sgd_job.coef_:{sgd_job.coef_.shape}")
+                
+            
+            #print("n:{} |data[n][0]: {} |data[n][1]:{}".format(n,data[n][0].shape,data[n][1].shape))
+            #print("n:{} |data[n][0]: {} |data[n][1]:{}".format(p.thread_num,X_train.shape,y_train.shape))
+            
+            #p.print(f"a{i} sgd_job.coef_:{len(sgd_job.coef_)}|sgd_job.intercept_:{len(sgd_job.intercept_)}")    
+            sgd_job.partial_fit(X_train, y_train)  # partial_fit() allows iterative training
+            #p.print(f"d{i}1 sgd_job.coef_:{sgd_job.coef_}|sgd_job.intercept_:{sgd_job.intercept_}")
+            
+            cur_score = sgd_job.score(X_test, y_test) 
+            cur_cost = computeCost(X_test,y_test,sgd_job.coef_)
+
+            scores[i][p.thread_num] = cur_score 
+            costs[i][p.thread_num] = cur_cost
+
+            #print(f"{p.thread_num}| cost[0]:{cost[0]}")
+            #print(f"{p.thread_num}| cur_cost:{cur_cost}")
+            #data_local = sgd_job.coef_ + [sgd_job.intercept_] + [cur_cost]
+            if cur_cost < cost[0]:
+                cost[0] = cur_cost
+                intercept[0] = sgd_job.intercept_
+                coef = sgd_job.coef_  
+
+
+    costs = np.mean(costs,axis=1)
+    scores = np.mean(scores,axis=1)
+    return scores, costs, cost
 
 def plot_scores(scores, agg_only=True):
     """
@@ -175,8 +347,8 @@ def computeCost(X, y, theta=[[0],[0]]):
 
 def plot_contour(X,y,theta,label=0):
         # Create grid coordinates for plotting
-    theta_0 = np.linspace(-0.5, 0.5, 50)
-    theta_1 = np.linspace(-0.5, 0.5, 50)
+    theta_0 = np.linspace(-20, 20, 50)
+    theta_1 = np.linspace(-20, 20, 50)
     theta_x, theta_y = np.meshgrid(theta_0, theta_0, indexing='xy')
     Z = np.zeros((theta_0.size,theta_1.size))
 
@@ -191,9 +363,7 @@ def plot_contour(X,y,theta,label=0):
     fig, ax = plt.subplots()
     CS = ax.contour(theta_x, theta_y, Z, np.logspace(np.log10(np.amin(Z)-1),np.log10(np.amax(Z)+1),15))
     ax.clabel(CS, inline=1, fontsize=10)
-    for t in theta:
-        ax.scatter(t[0],t[1], c='r')
-    
+    ax.scatter(theta[0],theta[1], c='r')
     ax.set_title('Curvas de nível (label: {})'.format(label))
     ax.set_xlabel(r'$\theta_0$')
     ax.set_ylabel(r'$\theta_1$')
