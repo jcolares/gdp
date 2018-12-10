@@ -143,101 +143,7 @@ def sim_parallel_sgd(X_train, y_train, X_test, y_test,
 
     return scores, costs, thetas
 
-def sim_parallel_sgd_p(X_train, y_train, X_test, y_test,
-                     n_iter, n_jobs, split_per_job, n_sync=1,
-                     overlap=False, verbose=False):
-    """
-    Simulate parallel execution of SGDRegressor.
-
-    Parameters
-    ----------
-    X_train: Input training data. May be split across workers, see split_per_job
-    y_train: Target training data
-    X_test: Input test data. Used by all workers
-    y_test: Target test data
-    n_iter: Number of iterations for each worker
-    n_jobs: Number of simulated workers
-    n_sync: Number of times weights should be syncrhonized, including the one at the end
-    split_per_job: Fraction of input data that each worker should have
-    overlap: Bool. Should there be overlap in the data split across workers, i.e. should the function use bootstraping
-
-    Returns
-    -------
-    scores: nested list of scores of each machine in each iteration
-        Each element contains scores for each machine. The last being the aggregate score
-        e.g.: [[machine 1 score in iter 1, machine 2 score in iter 1, ..., aggregate score in iter 1]
-               [machine 1 score in iter 2, machine 2 score in iter 2, ..., aggregate score in iter 2]
-               ...
-               [machine 1 score in iter n, machine 2 score in iter n, ..., aggregate score in iter n]]
-    """
-
-    """ Split data """
-    data = split_data(X_train, y_train, n_jobs, split_per_job, overlap)
-    #real_iter = int(n_iter/split_per_job)
-
-    """ Simulate parallel execution """
-    scores = []  # List containing final output
-    costs = []
-    thetas = []
-    sgds = []  # List of SGDRegressor objects for each "worker"
-    n_feature = X_train.shape[1]
-
-    for n in range(n_jobs):
-        # warm_start=True is important for iterative training
-        # sgds += [SGDRegressor(n_iter=1, warm_start=True)]
-        sgds += [SGDRegressor(max_iter=1, tol=0.001, warm_start=True)]
-    #sgds += [SGDRegressor()]  # For calculating aggregate score for each iteration
-    sgds += [SGDRegressor()]  # For calculating aggregate score for each iteration
-
-    print(n_iter)
-    for i in range(n_iter):  # Execute iterations one-by-one
-        
-        if verbose:
-            stdout.write("Iteration: " + str(i))
-            stdout.write('\r')
-
-        iter_scores  = pymp.shared.array((n_jobs,))
-        iter_costs = pymp.shared.array((n_jobs,))
-        iter_intercepts = pymp.shared.array((n_jobs,n_feature))
-        iter_coefs = pymp.shared.array((n_jobs,n_feature))
-
-
-        with pymp.Parallel(n_jobs) as p:
-            for n in p.range(n_jobs):
-                sgd = sgds[n]
-                if n < n_jobs:
-                    sgd.partial_fit(data[n][0], data[n][1])  # partial_fit() allows iterative training
-                    iter_scores[n] = sgd.score(X_test, y_test)
-                    iter_coefs[n] = sgd.coef_
-                    iter_intercepts[n] = sgd.intercept_
-                    iter_costs[n] = computeCost(X_test,y_test,sgd.coef_)
-
-
-        # Calcuate aggregate score for this iteration
-        #print("Iter:{}|cost:{}".format(i,iter_costs))
-
-        iter_costs = np.mean(np.array((iter_costs)),axis=0)
-        iter_coefs = np.mean(np.array(iter_coefs), axis=0)
-        iter_intercepts = np.mean(np.array(iter_intercepts), axis=0)
-        sgds[n].coef_ = iter_coefs
-        sgds[n].intercept_ = iter_intercepts
-        #iter_scores += [sgd.score(X_test, y_test)]
-    #p.print(p.thread_num)
-
-        scores += [iter_scores]
-        costs += [iter_costs]
-        thetas += [sgd.coef_]
-
-        if i % int(n_iter/n_sync) == 0 and i != 0:  # Sync weights every (n_iter/n_sync) iterations
-            if verbose:
-                print("Synced at iteration:", i)
-            for sgd in sgds[:-1]:  # Iterate through all workers except the last (which is used for aggregates)
-                sgd.coef_ = iter_coefs
-                sgd.intercept_ = iter_intercepts
-
-    return scores, costs, thetas
-
-def sim_parallel_sgd_c4(X_train, y_train, X_test, y_test,
+def sim_parallel_sgd_parallel(X_train, y_train, X_test, y_test,
                      n_iter, n_jobs, split_per_job, n_sync=1,
                      overlap=False, verbose=False, sync_type=0):
     """
@@ -302,19 +208,20 @@ def sim_parallel_sgd_c4(X_train, y_train, X_test, y_test,
                     coefs[p.thread_num] = sgds[p.thread_num].coef_
                     intercepts[p.thread_num] = sgds[p.thread_num].intercept_
 
-        #sincronia pela media     
-        if sync_type == 0:
+        #sincronização
+        if sync_type == 0: #sincronia pela media 
             iter_coefs = np.mean(coefs,axis=0)
             iter_intercepts = np.mean(intercepts,axis=0)
-        if sync_type == 1:
+        if sync_type == 1: #sincronia pelo minimo
             index = np.argmin(costs[n_perSync*(s+1)-1])
             iter_coefs = coefs[index]
             iter_intercepts = intercepts[index]
 
-        #sincronia pelo minimo
+        
 
         if verbose:
-            print("Synced at iteration:", n_perSync*s+i+1)
+            if s != n_sync-1: #não printa a última iteração, pros casos de não usar o sync
+                print("Synced at iteration:", n_perSync*s+i+1)
         for sgd in sgds:  # Iterate through all workers except the last (which is used for aggregates)
             sgd.coef_ = iter_coefs
             sgd.intercept_ = iter_intercepts
